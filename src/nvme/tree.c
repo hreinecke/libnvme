@@ -237,6 +237,9 @@ void nvme_free_subsystem(struct nvme_subsystem *s)
 	struct nvme_ctrl *c, *_c;
 	struct nvme_ns *n, *_n;
 
+	if (--s->refcount > 0)
+		return;
+
 	list_del_init(&s->entry);
 	nvme_subsystem_for_each_ctrl_safe(s, c, _c)
 		nvme_free_ctrl(c);
@@ -268,6 +271,7 @@ struct nvme_subsystem *nvme_lookup_subsystem(struct nvme_host *h,
 		if (name && s->name &&
 		    strcmp(s->name, name))
 			continue;
+		s->refcount++;
 		return s;
 	}
 	s = calloc(1, sizeof(*s));
@@ -276,6 +280,7 @@ struct nvme_subsystem *nvme_lookup_subsystem(struct nvme_host *h,
 
 	s->h = h;
 	s->subsysnqn = strdup(subsysnqn);
+	s->refcount = 1;
 	list_head_init(&s->ctrls);
 	list_head_init(&s->namespaces);
 	list_add(&h->subsystems, &s->entry);
@@ -287,6 +292,8 @@ void nvme_free_host(struct nvme_host *h)
 {
 	struct nvme_subsystem *s, *_s;
 
+	if (--h->refcount > 0)
+		return;
 	list_del_init(&h->entry);
 	nvme_for_each_subsystem_safe(h, s, _s)
 		nvme_free_subsystem(s);
@@ -310,6 +317,7 @@ struct nvme_host *nvme_lookup_host(nvme_root_t r, const char *hostnqn,
 		if (hostid &&
 		    strcmp(h->hostid, hostid))
 			continue;
+		h->refcount++;
 		return h;
 	}
 	h = calloc(1,sizeof(*h));
@@ -321,6 +329,7 @@ struct nvme_host *nvme_lookup_host(nvme_root_t r, const char *hostnqn,
 	list_head_init(&h->subsystems);
 	list_node_init(&h->entry);
 	h->r = r;
+	h->refcount = 1;
 	list_add(&r->hosts, &h->entry);
 	r->modified = true;
 
@@ -714,6 +723,9 @@ void nvme_free_ctrl(nvme_ctrl_t c)
 	struct nvme_path *p, *_p;
 	struct nvme_ns *n, *_n;
 
+	if (--c->refcount > 0)
+		return;
+
 	nvme_unlink_ctrl(c);
 
 	nvme_ctrl_for_each_path_safe(c, p, _p)
@@ -897,12 +909,14 @@ struct nvme_ctrl *nvme_lookup_ctrl(struct nvme_subsystem *s, const char *transpo
 		if (trsvcid && c->trsvcid &&
 		    strcmp(c->trsvcid, trsvcid))
 			continue;
+		c->refcount++;
 		return c;
 	}
 	c = nvme_create_ctrl(s->subsysnqn, transport, traddr,
 			     host_traddr, host_iface, trsvcid);
 	if (c) {
 		c->s = s;
+		c->refcount = 1;
 		list_add(&s->ctrls, &c->entry);
 		s->h->r->modified = true;
 	}
