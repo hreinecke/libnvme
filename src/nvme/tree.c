@@ -488,6 +488,10 @@ static int nvme_ctrl_scan_path(struct nvme_ctrl *c, char *name)
 	char *path, *grpid;
 	int ret;
 
+	if (!c->s) {
+		errno = ENXIO;
+		return -1;
+	}
 	ret = asprintf(&path, "%s/%s", c->sysfs_dir, name);
 	if (ret < 0) {
 		errno = ENOMEM;
@@ -632,7 +636,8 @@ struct nvme_fabrics_config *nvme_ctrl_get_config(nvme_ctrl_t c)
 void nvme_ctrl_disable_sqflow(nvme_ctrl_t c, bool disable_sqflow)
 {
 	c->cfg.disable_sqflow = disable_sqflow;
-	c->s->h->r->modified = true;
+	if (c->s && c->s->h && c->s->h->r)
+		c->s->h->r->modified = true;
 }
 
 void nvme_ctrl_set_discovered(nvme_ctrl_t c, bool discovered)
@@ -892,7 +897,7 @@ struct nvme_ctrl *nvme_lookup_ctrl(struct nvme_subsystem *s, const char *transpo
 {
 	struct nvme_ctrl *c;
 
-	if (!transport)
+	if (!s || !transport)
 		return NULL;
 	nvme_subsystem_for_each_ctrl(s, c) {
 		if (strcmp(c->transport, transport))
@@ -1042,14 +1047,22 @@ int nvme_init_ctrl(nvme_host_t h, nvme_ctrl_t c, int instance)
 	} else if (!s->name) {
 		ret = asprintf(&path, "%s/%s", nvme_subsys_sysfs_dir,
 			       subsys_name);
-		if (ret > 0) {
+		if (ret == 0 || !strlen(path)) {
+			errno = EINVAL;
+			ret = -1;
+		}
+		if (ret > 0)
 			ret = nvme_init_subsystem(s, subsys_name, path);
-			if (ret < 0)
-				free(path);
+		if (ret < 0) {
+			free(path);
+			nvme_free_subsystem(s);
+			s = NULL;
 		}
 	}
-	c->s = s;
-	list_add(&s->ctrls, &c->entry);
+	if (s) {
+		c->s = s;
+		list_add(&s->ctrls, &c->entry);
+	}
 	free(subsys_name);
 	free(name);
 	return ret;
@@ -1174,6 +1187,8 @@ static int nvme_subsystem_scan_ctrl(struct nvme_subsystem *s, char *name)
 
 void nvme_rescan_ctrl(struct nvme_ctrl *c)
 {
+	if (!c->s)
+		return;
 	nvme_subsystem_scan_namespaces(c->s);
 	nvme_ctrl_scan_namespaces(c);
 	nvme_ctrl_scan_paths(c);
@@ -1496,6 +1511,10 @@ static int nvme_ctrl_scan_namespace(struct nvme_ctrl *c, char *name)
 {
 	struct nvme_ns *n;
 
+	if (!c->s) {
+		errno = EINVAL;
+		return -1;
+	}
 	n = __nvme_scan_namespace(c->sysfs_dir, name);
 	if (!n)
 		return -1;
