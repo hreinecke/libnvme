@@ -650,16 +650,21 @@ int uuid_from_dmi(char *system_uuid)
 #define NVME_HOSTNQN_ID SD_ID128_MAKE(c7,f4,61,81,12,be,49,32,8c,83,10,6f,9d,dd,d8,6b)
 #endif
 
-static int uuid_from_systemd(char *system_uuid)
+static int uuid_from_systemd(char *system_uuid, int len)
 {
 	int ret = -ENOTSUP;
 #ifdef CONFIG_SYSTEMD
 	sd_id128_t id;
 
 	ret = sd_id128_get_machine_app_specific(NVME_HOSTNQN_ID, &id);
-	if (!ret)
-		asprintf(systemd_uuid, SD_ID128_FORMAT_STR,
-			 SD_ID128_FORMAT_VAL(id));
+	if (!ret) {
+		int rc = snprintf(system_uuid, len, SD_ID128_FORMAT_STR,
+				  SD_ID128_FORMAT_VAL(id));
+		if (rc < 0)
+			ret = -errno;
+		else if (rc >= len)
+			ret = -EOVERFLOW;
+	}
 #endif
 	return ret;
 }
@@ -675,7 +680,7 @@ char *nvmf_hostnqn_generate()
 
 	ret = uuid_from_dmi(uuid_str);
 	if (ret < 0)
-		ret = uuid_from_systemd(uuid_str);
+		ret = uuid_from_systemd(uuid_str, sizeof(uuid_str));
 #ifdef CONFIG_LIBUUID
 	if (ret < 0) {
 		uuid_generate_random(uuid);
