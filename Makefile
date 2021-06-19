@@ -8,7 +8,7 @@ INSTALL=install
 
 default: all
 
-python:
+python: all
 	@$(MAKE) -C src python
 
 all: $(NAME).pc
