@@ -1177,6 +1177,11 @@ long nvme_insert_tls_key_versioned(const char *keyring, const char *key_type,
 		return -1;
 
 	identity_len = strlen(hostnqn) + strlen(subsysnqn) + 12;
+	if (version == 1) {
+		identity_len += 33;
+		if (hmac == NVME_HMAC_ALG_SHA2_384)
+			identity_len += 16;
+	}
 	identity = malloc(identity_len);
 	if (!identity) {
 		errno = ENOMEM;
@@ -1211,6 +1216,40 @@ out_free_identity:
 	return key;
 }
 
+char *nvme_generate_tls_key_identity(const char *hostnqn, const char *subsysnqn,
+				     int version, int hmac,
+				     unsigned char *configured_key, int key_len)
+{
+	char *identity;
+	size_t identity_len;
+	unsigned char *psk;
+	int ret = -1;
+
+	identity_len = strlen(hostnqn) + strlen(subsysnqn) + 12;
+	if (version == 1) {
+		identity_len += 33;
+		if (hmac == NVME_HMAC_ALG_SHA2_384)
+			identity_len += 16;
+	}
+	identity = malloc(identity_len);
+	if (!identity)
+		return NULL;
+
+	psk = malloc(key_len);
+	if (!psk)
+		goto out_free_identity;
+
+	memset(psk, 0, key_len);
+	ret = derive_nvme_keys(hostnqn, subsysnqn, identity, version, hmac,
+			       configured_key, psk, key_len);
+	free(psk);
+out_free_identity:
+	if (ret < 0) {
+		free(identity);
+		identity = NULL;
+	}
+	return identity;
+}
 #else
 long nvme_lookup_keyring(const char *keyring)
 {
@@ -1248,6 +1287,16 @@ long nvme_insert_tls_key_versioned(const char *keyring, const char *key_type,
 				   const char *hostnqn, const char *subsysnqn,
 				   int version, int hmac,
 				   unsigned char *configured_key, int key_len)
+{
+	nvme_msg(NULL, LOG_ERR, "key operations not supported; " \
+		 "recompile with keyutils support.\n");
+	errno = ENOTSUP;
+	return -1;
+}
+
+char *nvme_generate_tls_key_identity(const char *hostnqn, const char *subsysnqn,
+				     int version, int hmac,
+				     unsigned char *configured_key, int key_len)
 {
 	nvme_msg(NULL, LOG_ERR, "key operations not supported; " \
 		 "recompile with keyutils support.\n");
