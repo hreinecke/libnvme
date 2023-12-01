@@ -541,21 +541,6 @@ static int derive_retained_key(int hmac, const char *hostnqn,
 	return -1;
 }
 
-static int gen_tls_identity(const char *hostnqn, const char *subsysnqn,
-			    int version, int hmac, char *identity,
-			    unsigned char *retained, size_t key_len)
-{
-	if (version != 0) {
-		nvme_msg(NULL, LOG_ERR, "NVMe TLS 2.0 is not supported; "
-			 "recompile with OpenSSL support.\n");
-		errno = ENOTSUP;
-		return -1;
-	}
-	sprintf(identity, "NVMe0R%02d %s %s",
-		hmac, hostnqn, subsysnqn);
-	return strlen(identity);
-}
-
 static int derive_tls_key(int hmac, const char *identity,
 			  unsigned char *retained,
 			  unsigned char *psk, size_t key_len)
@@ -785,85 +770,78 @@ int nvme_gen_dhchap_key(char *hostnqn, enum nvme_hmac_alg hmac,
 	return 0;
 }
 
-static int gen_tls_identity(const char *hostnqn, const char *subsysnqn,
-			    int version, int hmac, char *identity,
-			    unsigned char *retained, size_t key_len)
+static char *gen_psk_digest(const char *hostnqn, const char *subsysnqn,
+			  int hmac, unsigned char *retained,
+			  size_t key_len, size_t *digest_len)
 {
 	static const char hmac_seed[] = "NVMe-over-Fabrics";
 	size_t hmac_len;
 	const EVP_MD *md = select_hmac(hmac, &hmac_len);
 	_cleanup_hmac_ctx_ HMAC_CTX *hmac_ctx = NULL;
 	_cleanup_free_ unsigned char *psk_ctx = NULL;
-	_cleanup_free_ char *enc_ctx = NULL;
+	char *digest;
 	size_t len;
-
-	if (version == 0) {
-		sprintf(identity, "NVMe%01dR%02d %s %s",
-			version, hmac, hostnqn, subsysnqn);
-		return strlen(identity);
-	}
-	if (version > 1) {
-		errno = EINVAL;
-		return -1;
-	}
 
 	hmac_ctx = HMAC_CTX_new();
 	if (!hmac_ctx) {
 		errno = ENOMEM;
-		return -1;
+		return NULL;
 	}
 	if (!md) {
 		errno = EINVAL;
-		return -1;
+		return NULL;
 	}
 
 	psk_ctx = malloc(key_len);
 	if (!psk_ctx) {
 		errno = ENOMEM;
-		return -1;
+		return NULL;
 	}
 	if (!HMAC_Init_ex(hmac_ctx, retained, key_len, md, NULL)) {
 		errno = ENOMEM;
-		return -1;
+		return NULL;
 	}
 	if (!HMAC_Update(hmac_ctx, (unsigned char *)hostnqn,
 			 strlen(hostnqn))) {
 		errno = ENOKEY;
-		return -1;
+		return NULL;
 	}
 	if (!HMAC_Update(hmac_ctx, (unsigned char *)" ", 1)) {
 		errno = ENOKEY;
-		return -1;
+		return NULL;
 	}
 	if (!HMAC_Update(hmac_ctx, (unsigned char *)subsysnqn,
 			 strlen(subsysnqn))) {
 		errno = ENOKEY;
-		return -1;
+		return NULL;
 	}
 	if (!HMAC_Update(hmac_ctx, (unsigned char *)" ", 1)) {
 		errno = ENOKEY;
-		return -1;
+		return NULL;
 	}
 	if (!HMAC_Update(hmac_ctx, (unsigned char *)hmac_seed,
 			 strlen(hmac_seed))) {
 		errno = ENOKEY;
-		return -1;
+		return NULL;
 	}
 	if (!HMAC_Final(hmac_ctx, psk_ctx, (unsigned int *)&key_len)) {
 		errno = ENOKEY;
-		return -1;
+		return NULL;
 	}
-	enc_ctx = malloc(key_len * 2);
-	memset(enc_ctx, 0, key_len * 2);
-	len = base64_encode(psk_ctx, key_len, enc_ctx);
+	digest = malloc(key_len * 2);
+	if (!digest)
+		return NULL;
+
+	memset(digest, 0, key_len * 2);
+	len = base64_encode(psk_ctx, key_len, digest);
 	if (len < 0) {
 		errno = ENOKEY;
-		return len;
+		return NULL;
 	}
-	sprintf(identity, "NVMe%01dR%02d %s %s %s",
-		version, hmac, hostnqn, subsysnqn, enc_ctx);
-	return strlen(identity);
+	*digest_len = len;
+	return digest;
 }
+
 #endif /* !CONFIG_OPENSSL_1 */
 
 #ifdef CONFIG_OPENSSL_3
@@ -958,9 +936,9 @@ int nvme_gen_dhchap_key(char *hostnqn, enum nvme_hmac_alg hmac,
 	return 0;
 }
 
-static int gen_tls_identity(const char *hostnqn, const char *subsysnqn,
-			    int version, int hmac, char *identity,
-			    unsigned char *retained, size_t key_len)
+static char *gen_psk_digest(const char *hostnqn, const char *subsysnqn,
+			    int hmac, unsigned char *retained,
+			    size_t key_len, size_t *digest_len)
 {
 	static const char hmac_seed[] = "NVMe-over-Fabrics";
 	size_t hmac_len;
@@ -971,34 +949,24 @@ static int gen_tls_identity(const char *hostnqn, const char *subsysnqn,
 	char *progq = NULL;
 	char *digest = NULL;
 	_cleanup_free_ unsigned char *psk_ctx = NULL;
-	_cleanup_free_ char *enc_ctx = NULL;
+	char *digest;
 	size_t len;
-
-	if (version == 0) {
-		sprintf(identity, "NVMe%01dR%02d %s %s",
-			version, hmac, hostnqn, subsysnqn);
-		return strlen(identity);
-	}
-	if (version > 1) {
-		errno = EINVAL;
-		return -1;
-	}
 
 	lib_ctx = OSSL_LIB_CTX_new();
 	if (!lib_ctx) {
 		errno = ENOMEM;
-		return -1;
+		return NULL;
 	}
 	mac = EVP_MAC_fetch(lib_ctx, OSSL_MAC_NAME_HMAC, progq);
 	if (!mac) {
 		errno = ENOMEM;
-		return -1;
+		return NULL;
 	}
 
 	mac_ctx = EVP_MAC_CTX_new(mac);
 	if (!mac_ctx) {
 		errno = ENOMEM;
-		return -1;
+		return NULL;
 	}
 	switch (hmac) {
 	case NVME_HMAC_ALG_SHA2_256:
@@ -1012,7 +980,7 @@ static int gen_tls_identity(const char *hostnqn, const char *subsysnqn,
 		break;
 	}
 	if (!digest)
-		return -1;
+		return NULL;
 	*p++ = OSSL_PARAM_construct_utf8_string(OSSL_MAC_PARAM_DIGEST,
 						digest, 0);
 	*p = OSSL_PARAM_construct_end();
@@ -1020,17 +988,17 @@ static int gen_tls_identity(const char *hostnqn, const char *subsysnqn,
 	psk_ctx = malloc(key_len);
 	if (!psk_ctx) {
 		errno = ENOMEM;
-		return -1;
+		return NULL;
 	}
 
 	if (!EVP_MAC_init(mac_ctx, retained, key_len, params)) {
 		errno = ENOKEY;
-		return -1;
+		return NULL;
 	}
 	if (!EVP_MAC_update(mac_ctx, (unsigned char *)hostnqn,
 			    strlen(hostnqn))) {
 		errno = ENOKEY;
-		return -1;
+		return NULL;
 	}
 	if (!EVP_MAC_update(mac_ctx, (unsigned char *)" ", 1)) {
 		errno = ENOKEY;
@@ -1039,37 +1007,64 @@ static int gen_tls_identity(const char *hostnqn, const char *subsysnqn,
 	if (!EVP_MAC_update(mac_ctx, (unsigned char *)subsysnqn,
 			    strlen(subsysnqn))) {
 		errno = ENOKEY;
-		return -1;
+		return NULL;
 	}
 	if (!EVP_MAC_update(mac_ctx, (unsigned char *)" ", 1)) {
 		errno = ENOKEY;
-		return -1;
+		return NULL;
 	}
 	if (!EVP_MAC_update(mac_ctx, (unsigned char *)hmac_seed,
 			    strlen(hmac_seed))) {
 		errno = ENOKEY;
-		return -1;
+		return NULL;
 	}
 	if (!EVP_MAC_final(mac_ctx, psk_ctx, &hmac_len, key_len)) {
 		errno = ENOKEY;
-		return -1;
+		return NULL;
 	}
 	if (hmac_len > key_len) {
 		errno = EMSGSIZE;
-		return -1;
+		return NULL;
 	}
-	enc_ctx = malloc(hmac_len * 2);
-	memset(enc_ctx, 0, hmac_len * 2);
-	len = base64_encode(psk_ctx, hmac_len, enc_ctx);
+	digest = malloc(hmac_len * 2);
+	memset(digest, 0, hmac_len * 2);
+	len = base64_encode(digest, hmac_len, enc_ctx);
 	if (len < 0) {
 		errno = ENOKEY;
-		return len;
+		return NULL;
 	}
+	*digest_len = len;
+	return digest;
+}
+
+#endif /* !CONFIG_OPENSSL_3 */
+
+static int gen_tls_identity(const char *hostnqn, const char *subsysnqn,
+			    int version, int hmac, char *identity,
+			    unsigned char *retained, size_t key_len)
+{
+	char *digest = NULL;
+	size_t digest_len;
+
+	if (version == 0) {
+		sprintf(identity, "NVMe%01dR%02d %s %s",
+			version, hmac, hostnqn, subsysnqn);
+		return strlen(identity);
+	}
+	if (version > 1) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	digest = gen_psk_digest(hostnqn, subsysnqn, hmac, retained,
+				 key_len, &digest_len);
+	if (!digest)
+		return -1;
 	sprintf(identity, "NVMe%01dR%02d %s %s %s",
-		version, hmac, hostnqn, subsysnqn, enc_ctx);
+		version, hmac, hostnqn, subsysnqn, digest);
+	free(digest);
 	return strlen(identity);
 }
-#endif /* !CONFIG_OPENSSL_3 */
 
 static int derive_nvme_keys(const char *hostnqn, const char *subsysnqn,
 			    char *identity, int version,
