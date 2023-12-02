@@ -1039,61 +1039,6 @@ static char *gen_psk_digest(const char *hostnqn, const char *subsysnqn,
 
 #endif /* !CONFIG_OPENSSL_3 */
 
-static int gen_tls_identity(const char *hostnqn, const char *subsysnqn,
-			    int version, int hmac, char *identity,
-			    unsigned char *retained, size_t key_len)
-{
-	char *digest = NULL;
-	size_t digest_len;
-
-	if (version == 0) {
-		sprintf(identity, "NVMe%01dR%02d %s %s",
-			version, hmac, hostnqn, subsysnqn);
-		return strlen(identity);
-	}
-	if (version > 1) {
-		errno = EINVAL;
-		return -1;
-	}
-
-	digest = gen_psk_digest(hostnqn, subsysnqn, hmac, retained,
-				 key_len, &digest_len);
-	if (!digest)
-		return -1;
-	sprintf(identity, "NVMe%01dR%02d %s %s %s",
-		version, hmac, hostnqn, subsysnqn, digest);
-	free(digest);
-	return strlen(identity);
-}
-
-static int derive_nvme_keys(const char *hostnqn, const char *subsysnqn,
-			    char *identity, int version,
-			    int hmac, unsigned char *configured,
-			    unsigned char *psk, int key_len)
-{
-	_cleanup_free_ unsigned char *retained = NULL;
-	int ret = -1;
-
-	if (!hostnqn || !subsysnqn || !identity || !psk) {
-		errno = EINVAL;
-		return -1;
-	}
-
-	retained = malloc(key_len);
-	if (!retained) {
-		errno = ENOMEM;
-		return -1;
-	}
-	ret = derive_retained_key(hmac, hostnqn, configured, retained, key_len);
-	if (ret < 0)
-		return ret;
-	ret = gen_tls_identity(hostnqn, subsysnqn, version, hmac,
-			       identity, retained, key_len);
-	if (ret < 0)
-		return ret;
-	return derive_tls_key(hmac, identity, retained, psk, key_len);
-}
-
 static size_t nvme_identity_len(int hmac, int version, const char *hostnqn,
 				const char *subsysnqn)
 {
@@ -1113,12 +1058,22 @@ static size_t nvme_identity_len(int hmac, int version, const char *hostnqn,
 
 char *nvme_generate_tls_key_identity(const char *hostnqn, const char *subsysnqn,
 				     int version, int hmac,
-				     unsigned char *configured_key, int key_len)
+				     unsigned char *configured, int key_len)
 {
+	_cleanup_free_ unsigned char *retained = NULL;
 	char *identity;
 	size_t identity_len;
 	_cleanup_free_ unsigned char *psk = NULL;
 	int ret = -1;
+
+	retained = malloc(key_len);
+	if (!retained) {
+		errno = ENOMEM;
+		return NULL;
+	}
+	ret = derive_retained_key(hmac, hostnqn, configured, retained, key_len);
+	if (ret < 0)
+		return NULL;
 
 	identity_len = nvme_identity_len(hmac, version, hostnqn, subsysnqn);
 	if (identity_len < 0)
@@ -1128,17 +1083,20 @@ char *nvme_generate_tls_key_identity(const char *hostnqn, const char *subsysnqn,
 	if (!identity)
 		return NULL;
 
-	psk = malloc(key_len);
-	if (!psk)
-		goto out_free_identity;
+	sprintf(identity, "NVMe%01dR%02d %s %s",
+		version, hmac, hostnqn, subsysnqn);
 
-	memset(psk, 0, key_len);
-	ret = derive_nvme_keys(hostnqn, subsysnqn, identity, version, hmac,
-			       configured_key, psk, key_len);
-out_free_identity:
-	if (ret < 0) {
-		free(identity);
-		identity = NULL;
+	if (version == 1) {
+		char *digest;
+		size_t digest_len;
+
+		digest = gen_psk_digest(hostnqn, subsysnqn, hmac, retained,
+					key_len, &digest_len);
+		if (!digest)
+			return NULL;
+		strcat(identity, " ");
+		strcat(identity, digest);
+		free(digest);
 	}
 	return identity;
 }
@@ -1186,9 +1144,10 @@ int nvme_set_keyring(long key_id)
 long nvme_insert_tls_key_versioned(const char *keyring, const char *key_type,
 				   const char *hostnqn, const char *subsysnqn,
 				   int version, int hmac,
-				   unsigned char *configured_key, int key_len)
+				   unsigned char *configured, int key_len)
 {
 	key_serial_t keyring_id, key;
+	_cleanup_free_ unsigned char *retained = NULL;
 	_cleanup_free_ char *identity = NULL;
 	size_t identity_len;
 	_cleanup_free_ unsigned char *psk = NULL;
@@ -1197,6 +1156,15 @@ long nvme_insert_tls_key_versioned(const char *keyring, const char *key_type,
 	keyring_id = nvme_lookup_keyring(keyring);
 	if (keyring_id == 0)
 		return -1;
+
+	retained = malloc(key_len);
+	if (!retained) {
+		errno = ENOMEM;
+		return -1;
+	}
+	ret = derive_retained_key(hmac, hostnqn, configured, retained, key_len);
+	if (ret < 0)
+		return ret;
 
 	identity_len = nvme_identity_len(hmac, version, hostnqn, subsysnqn);
 	if (identity_len < 0)
@@ -1208,14 +1176,29 @@ long nvme_insert_tls_key_versioned(const char *keyring, const char *key_type,
 		return -1;
 	}
 
+	sprintf(identity, "NVMe%01dR%02d %s %s",
+		version, hmac, hostnqn, subsysnqn);
+
+	if (version == 1) {
+		char *digest;
+		size_t digest_len;
+
+		digest = gen_psk_digest(hostnqn, subsysnqn, hmac, retained,
+					key_len, &digest_len);
+		if (!digest)
+			return -1;
+		strcat(identity, " ");
+		strcat(identity, digest);
+		free(digest);
+	}
+
 	psk = malloc(key_len);
 	if (!psk) {
 		errno = ENOMEM;
 		return 0;
 	}
 	memset(psk, 0, key_len);
-	ret = derive_nvme_keys(hostnqn, subsysnqn, identity, version, hmac,
-			       configured_key, psk, key_len);
+	ret = derive_tls_key(hmac, identity, retained, psk, key_len);
 	if (ret != key_len)
 		return 0;
 
