@@ -1148,6 +1148,8 @@ long nvme_insert_tls_key_versioned(const char *keyring, const char *key_type,
 {
 	key_serial_t keyring_id, key;
 	_cleanup_free_ unsigned char *retained = NULL;
+	_cleanup_free_ char *digest = NULL;
+	size_t digest_len;
 	_cleanup_free_ char *identity = NULL;
 	size_t identity_len;
 	_cleanup_free_ unsigned char *psk = NULL;
@@ -1180,16 +1182,12 @@ long nvme_insert_tls_key_versioned(const char *keyring, const char *key_type,
 		version, hmac, hostnqn, subsysnqn);
 
 	if (version == 1) {
-		char *digest;
-		size_t digest_len;
-
 		digest = gen_psk_digest(hostnqn, subsysnqn, hmac, retained,
 					key_len, &digest_len);
 		if (!digest)
 			return -1;
 		strcat(identity, " ");
 		strcat(identity, digest);
-		free(digest);
 	}
 
 	psk = malloc(key_len);
@@ -1198,7 +1196,8 @@ long nvme_insert_tls_key_versioned(const char *keyring, const char *key_type,
 		return 0;
 	}
 	memset(psk, 0, key_len);
-	ret = derive_tls_key(hmac, identity, retained, psk, key_len);
+	ret = derive_tls_key(hmac, version == 1 ? digest : identity,
+			     retained, psk, key_len);
 	if (ret != key_len)
 		return 0;
 
