@@ -1247,6 +1247,13 @@ long nvme_insert_tls_key_versioned(const char *keyring, const char *key_type,
 		return -1;
 	}
 
+	ret = keyctl_link(keyring_id, KEY_SPEC_SESSION_KEYRING);
+	if (ret < 0) {
+		nvme_msg(NULL, LOG_ERR,
+			 "Failed to link keyring '%s' (%lx) error %d\n",
+			 keyring, (long)keyring_id, errno);
+		return 0;
+	}
 	identity_len = nvme_identity_len(hmac, version, hostnqn, subsysnqn);
 	if (identity_len < 0) {
 		nvme_msg(NULL, LOG_ERR, "Failed to calculate identity len\n");
