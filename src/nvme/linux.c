@@ -1281,20 +1281,19 @@ long nvme_insert_tls_key_versioned(const char *keyring, const char *key_type,
 
 	key = keyctl_search(keyring_id, key_type, identity, 0);
 	if (key > 0) {
-		if (keyctl_update(key, psk, key_len) < 0) {
-			nvme_msg(NULL, LOG_ERR, "Failed to update key '%s'\n",
+		if (keyctl_revoke(key) < 0) {
+			nvme_msg(NULL, LOG_ERR, "Failed to revoke key '%s'\n",
 				 identity);
-			key = 0;
-		}
-	} else {
-		key = add_key(key_type, identity,
-			      psk, key_len, keyring_id);
-		if (key < 0) {
-			nvme_msg(NULL, LOG_ERR, "Failed to add key '%s'\n",
-				 identity);
-			key = 0;
 		}
 	}
+	key = add_key(key_type, identity,
+		      psk, key_len, keyring_id);
+	if (key < 0) {
+		nvme_msg(NULL, LOG_ERR, "Failed to add key '%s'\n",
+			 identity);
+		key = 0;
+	}
+
 	return key;
 }
 
