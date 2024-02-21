@@ -1365,7 +1365,7 @@ char *nvme_export_tls_key(const unsigned char *key_data, int key_len)
 	}
 	memset(encoded_key, 0, encoded_len);
 	len = sprintf(encoded_key, "NVMeTLSkey-1:%02x:",
-		      raw_len == 32 ? 1 : 2);
+		      key_len == 32 ? 1 : 2);
 	base64_encode(raw_secret, raw_len, encoded_key + len);
 	strcat(encoded_key, ":");
 
