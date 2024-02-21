@@ -1016,6 +1016,11 @@ const char *nvme_ctrl_get_host_iface(nvme_ctrl_t c)
 	return c->cfg.host_iface;
 }
 
+const long nvme_ctrl_get_tls_key(nvme_ctrl_t c)
+{
+	return c->cfg.tls_key;
+}
+
 struct nvme_fabrics_config *nvme_ctrl_get_config(nvme_ctrl_t c)
 {
 	return &c->cfg;
@@ -1772,7 +1777,7 @@ static int nvme_configure_ctrl(nvme_root_t r, nvme_ctrl_t c, const char *path,
 			       const char *name)
 {
 	DIR *d;
-	char *host_key;
+	char *host_key, *tls_psk;
 
 	d = opendir(path);
 	if (!d) {
@@ -1806,6 +1811,13 @@ static int nvme_configure_ctrl(nvme_root_t r, nvme_ctrl_t c, const char *path,
 	if (c->dhchap_ctrl_key && !strcmp(c->dhchap_ctrl_key, "none")) {
 		free(c->dhchap_ctrl_key);
 		c->dhchap_ctrl_key = NULL;
+	}
+	tls_psk = nvme_get_ctrl_attr(c, "tls_key");
+	if (tls_psk) {
+		char *endptr;
+		long key_id = strtol(tls_psk, &endptr, 16);
+		if (endptr != tls_psk)
+			c->cfg.tls_key = key_id;
 	}
 	c->cntrltype = nvme_get_ctrl_attr(c, "cntrltype");
 	c->dctype = nvme_get_ctrl_attr(c, "dctype");
@@ -1994,9 +2006,6 @@ nvme_ctrl_t nvme_scan_ctrl(nvme_root_t r, const char *name)
 			free(h->dhchap_key);
 			h->dhchap_key = NULL;
 		}
-		if (h->tls_key)
-			free(h->tls_key);
-		h->tls_key = nvme_get_attr(path, "tls_key");
 	}
 	if (!h) {
 		h = nvme_default_host(r);
