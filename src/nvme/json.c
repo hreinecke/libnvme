@@ -42,7 +42,10 @@ static void json_import_nvme_tls_key(nvme_ctrl_t c, const char *keyring_str,
 	key_id = nvme_insert_tls_key_versioned(keyring_str, "psk",
 					       hostnqn, subsysnqn,
 					       0, hmac, key_data, key_len);
-	if (key_id > 0)
+	if (key_id < 0)
+		nvme_msg(NULL, LOG_ERR, "Failed to insert TLS KEY, error %d\n",
+			 errno);
+	else
 		cfg->tls_key = key_id;
 }
 
