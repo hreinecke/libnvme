@@ -1183,6 +1183,33 @@ long nvme_lookup_key(const char *type, const char *identity)
 	return key;
 }
 
+char *nvme_read_key(long key_id, int *len)
+{
+	char *buffer;
+	unsigned int buffer_len = 48;
+	long res;
+
+	buffer = malloc(buffer_len);
+	if (!buffer) {
+		errno = ENOMEM;
+		return NULL;
+	}
+	memset(buffer, 0, buffer_len);
+	res = keyctl_read(key_id, buffer, buffer_len);
+	if (res < 0) {
+		free(buffer);
+		errno = -res;
+		return NULL;
+	}
+	if (res > buffer_len) {
+		free(buffer);
+		errno = EFBIG;
+		return NULL;
+	}
+	*len = res;
+	return 0;
+}
+
 int nvme_set_keyring(long key_id)
 {
 	long err;
@@ -1265,6 +1292,14 @@ long nvme_lookup_key(const char *type, const char *identity)
 		 "recompile with keyutils support.\n");
 	errno = ENOTSUP;
 	return 0;
+}
+
+char *nvme_read_key(long key_id, int *len)
+{
+	nvme_msg(NULL, LOG_ERR, "key operations not supported; "\
+		 "recompile with keyutils support.\n");
+	errno = ENOTSUP;
+	return NULL;
 }
 
 int nvme_set_keyring(long key_id)

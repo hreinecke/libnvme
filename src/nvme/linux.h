@@ -262,6 +262,19 @@ char *nvme_describe_key_serial(long key_id);
 long nvme_lookup_key(const char *type, const char *identity);
 
 /**
+ * nvme_read_key() - Read key raw data
+ * @key_id:      Key id
+ * @len:         Length of the returned data
+ *
+ * Reads the payload of the key specified by @key_id.
+ * @len holds the size of the returned buffer.
+ *
+ * Return: Pointer to the payload on success,
+ * or NULL with errno set otherwise.
+ */
+char *nvme_read_key(long key_id, int *len);
+
+/**
  * nvme_set_keyring() - Link keyring for lookup
  * @keyring_id:    Keyring id
  *
