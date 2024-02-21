@@ -45,8 +45,10 @@ static void json_import_nvme_tls_key(nvme_ctrl_t c, const char *keyring_str,
 	if (key_id < 0)
 		nvme_msg(NULL, LOG_ERR, "Failed to insert TLS KEY, error %d\n",
 			 errno);
-	else
+	else {
 		cfg->tls_key = key_id;
+		nvme_msg(NULL, LOG_ERR, "Inserted key %ld\n", key_id);
+	}
 }
 
 static void json_update_attributes(nvme_ctrl_t c,
@@ -143,8 +145,10 @@ static void json_parse_port(nvme_subsystem_t s, struct json_object *port_obj)
 		trsvcid = json_object_get_string(attr_obj);
 	c = nvme_lookup_ctrl(s, transport, traddr, host_traddr,
 			     host_iface, trsvcid, NULL);
-	if (!c)
+	if (!c) {
+		nvme_msg(NULL, LOG_ERR, "No controller found\n");
 		return;
+	}
 	json_update_attributes(c, port_obj);
 	attr_obj = json_object_object_get(port_obj, "dhchap_key");
 	if (attr_obj)
