@@ -350,7 +350,6 @@ char *nvme_generate_tls_key_identity(const char *hostnqn, const char *subsysnqn,
 
 /**
  * nvme_export_tls_key() - Export a TLS key
- * @hmac:	HMAC algorithm
  * @key_data:	Raw data of the key
  * @key_len:	Length of @key_data
  *
@@ -360,7 +359,7 @@ char *nvme_generate_tls_key_identity(const char *hostnqn, const char *subsysnqn,
  * Return: The string containing the TLS identity. It is the responsibility
  * of the caller to free the returned string.
  */
-char *nvme_export_tls_key(unsigned int hmac, const char *buffer, int key_len);
+char *nvme_export_tls_key(const char *buffer, int key_len);
 
 /**
  * nvme_import_tls_key() - Import a TLS key

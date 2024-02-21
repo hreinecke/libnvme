@@ -1332,21 +1332,20 @@ long nvme_insert_tls_key(const char *keyring, const char *key_type,
 					     configured_key, key_len);
 }
 
-char *nvme_export_tls_key(unsigned int hmac, const char *key_data, int key_len)
+char *nvme_export_tls_key(const char *key_data, int key_len)
 {
 	unsigned char raw_secret[52];
 	char *encoded_key;
-	unsigned int raw_len = 32, encoded_len, len;
+	unsigned int raw_len, encoded_len, len;
 	unsigned long crc = crc32(0L, NULL, 0);
 
-	if (hmac != 1 && hmac != 2) {
-		errno = EINVAL;
-		return NULL;
-	}
-	if (hmac == 2)
+	if (key_len == 32) {
+		raw_len = 32;
+		hmac = 1;
+	} else if (key_len == 48) {
 		raw_len = 48;
-
-	if (raw_len != key_len) {
+		hmac = 2;
+	} else {
 		errno = EINVAL;
 		return NULL;
 	}
