@@ -372,6 +372,9 @@ static void json_update_port(struct json_object *ctrl_array, nvme_ctrl_t c)
 			if (psk)
 				json_object_object_add(port_obj, "tls_key",
 						       json_object_new_string(psk));
+		} else {
+			json_object_object_add(port_obj, "tls_key",
+					       json_object_new_int(cfg->tls_key));
 		}
 	}
 

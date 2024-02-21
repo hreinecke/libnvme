@@ -1200,8 +1200,8 @@ unsigned char *nvme_read_key(long key_id, int *len)
 	memset(buffer, 0, buffer_len);
 	res = keyctl_read(key_id, (char *)buffer, buffer_len);
 	if (res < 0) {
-		nvme_msg(NULL, LOG_ERR, "Failed to read key %08lx, error %ld\n",
-			 key_id, -res);
+		nvme_msg(NULL, LOG_ERR, "Failed to read key %08lx, error %d\n",
+			 key_id, errno);
 		free(buffer);
 		errno = -res;
 		return NULL;
