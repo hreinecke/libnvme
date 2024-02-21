@@ -363,7 +363,8 @@ static void json_update_port(struct json_object *ctrl_array, nvme_ctrl_t c)
 	if (cfg->tls_key) {
 		int key_len;
 		_cleanup_free_ unsigned char *key_data =
-			nvme_read_key(cfg->tls_key, &key_len);
+			nvme_read_key((const char *)cfg->keyring,
+				      cfg->tls_key, &key_len);
 
 		if (key_data) {
 			_cleanup_free_ char *psk =

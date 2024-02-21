@@ -1186,12 +1186,14 @@ long nvme_lookup_key(const char *type, const char *identity)
 	return key;
 }
 
-unsigned char *nvme_read_key(long key_id, int *len)
+unsigned char *nvme_read_key(const char *keyring, long key_id, int *len)
 {
-	char keyring[] = ".nvme";
 	long serial;
 	void *buffer;
 	int ret;
+
+	if (!keyring)
+		keyring = ".nvme";
 
 	serial = find_key_by_type_and_desc("keyring", keyring, 0);
 	if (!serial) {
