@@ -1994,6 +1994,9 @@ nvme_ctrl_t nvme_scan_ctrl(nvme_root_t r, const char *name)
 			free(h->dhchap_key);
 			h->dhchap_key = NULL;
 		}
+		if (h->tls_key)
+			free(h->tls_key);
+		h->tls_key = nvme_get_attr(path, "tls_key");
 	}
 	if (!h) {
 		h = nvme_default_host(r);
