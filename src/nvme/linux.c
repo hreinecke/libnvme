@@ -1208,7 +1208,7 @@ char *nvme_read_key(long key_id, int *len)
 		return NULL;
 	}
 	*len = res;
-	return 0;
+	return buffer;
 }
 
 int nvme_set_keyring(long key_id)
@@ -1341,10 +1341,8 @@ char *nvme_export_tls_key(const char *key_data, int key_len)
 
 	if (key_len == 32) {
 		raw_len = 32;
-		hmac = 1;
 	} else if (key_len == 48) {
 		raw_len = 48;
-		hmac = 2;
 	} else {
 		errno = EINVAL;
 		return NULL;
@@ -1364,7 +1362,8 @@ char *nvme_export_tls_key(const char *key_data, int key_len)
 		return NULL;
 	}
 	memset(encoded_key, 0, encoded_len);
-	len = sprintf(encoded_key, "NVMeTLSkey-1:%02x:", hmac);
+	len = sprintf(encoded_key, "NVMeTLSkey-1:%02x:",
+		      raw_len == 32 ? 1 : 2);
 	base64_encode(raw_secret, raw_len, encoded_key + len);
 	strcat(encoded_key, ":");
 

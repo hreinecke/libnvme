@@ -347,12 +347,17 @@ static void json_update_port(struct json_object *ctrl_array, nvme_ctrl_t c)
 		}
 	}
 	if (cfg->tls_key) {
-		_cleanup_free_ char *desc =
-			nvme_describe_key_serial(cfg->tls_key);
+		unsigned int key_len;
+		_cleanup_free_ unsigned char *key_data =
+			nvme_read_key(cfg->tls_key, &key_len);
 
-		if (desc) {
-			json_object_object_add(port_obj, "tls_key",
-					       json_object_new_string(desc));
+		if (key_data) {
+			_cleanup_free_ char *psk =
+				nvme_export_tls_key(key_data, key_len);
+
+			if (psk)
+				json_object_object_add(port_obj, "tls_key",
+						       json_object_new_string(psk));
 		}
 	}
 
