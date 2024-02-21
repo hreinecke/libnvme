@@ -1159,6 +1159,8 @@ long nvme_lookup_keyring(const char *keyring)
 {
 	key_serial_t keyring_id;
 
+	if (!keyring)
+		keyring = ".nvme";
 	keyring_id = find_key_by_type_and_desc("keyring", keyring, 0);
 	if (keyring_id < 0)
 		return 0;
@@ -1184,9 +1186,9 @@ long nvme_lookup_key(const char *type, const char *identity)
 	return key;
 }
 
-char *nvme_read_key(long key_id, int *len)
+unsigned char *nvme_read_key(long key_id, int *len)
 {
-	char *buffer;
+	unsigned char *buffer;
 	unsigned int buffer_len = 48;
 	long res;
 
@@ -1196,7 +1198,7 @@ char *nvme_read_key(long key_id, int *len)
 		return NULL;
 	}
 	memset(buffer, 0, buffer_len);
-	res = keyctl_read(key_id, buffer, buffer_len);
+	res = keyctl_read(key_id, (char *)buffer, buffer_len);
 	if (res < 0) {
 		free(buffer);
 		errno = -res;
@@ -1332,7 +1334,7 @@ long nvme_insert_tls_key(const char *keyring, const char *key_type,
 					     configured_key, key_len);
 }
 
-char *nvme_export_tls_key(const char *key_data, int key_len)
+char *nvme_export_tls_key(const unsigned char *key_data, int key_len)
 {
 	unsigned char raw_secret[52];
 	char *encoded_key;
@@ -1370,7 +1372,7 @@ char *nvme_export_tls_key(const char *key_data, int key_len)
 	return encoded_key;
 }
 
-unsigned char *nvme_import_tls_key(char *keydata, int *key_len,
+unsigned char *nvme_import_tls_key(const char *keydata, int *key_len,
 				   unsigned int *hmac)
 {
 	unsigned char decoded_key[128], *secret;

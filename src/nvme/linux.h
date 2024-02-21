@@ -272,7 +272,7 @@ long nvme_lookup_key(const char *type, const char *identity);
  * Return: Pointer to the payload on success,
  * or NULL with errno set otherwise.
  */
-char *nvme_read_key(long key_id, int *len);
+unsigned char *nvme_read_key(long key_id, int *len);
 
 /**
  * nvme_set_keyring() - Link keyring for lookup
@@ -359,7 +359,7 @@ char *nvme_generate_tls_key_identity(const char *hostnqn, const char *subsysnqn,
  * Return: The string containing the TLS identity. It is the responsibility
  * of the caller to free the returned string.
  */
-char *nvme_export_tls_key(const char *buffer, int key_len);
+char *nvme_export_tls_key(const unsigned char *buffer, int key_len);
 
 /**
  * nvme_import_tls_key() - Import a TLS key
@@ -373,7 +373,7 @@ char *nvme_export_tls_key(const char *buffer, int key_len);
  * Return: The raw data of the PSK or NULL with errno set on error. It is
  * the responsibility of the caller to free the returned string.
  */
-unsigned char *nvme_import_tls_key(char *keydata, int *key_len,
+unsigned char *nvme_import_tls_key(const char *keydata, int *key_len,
 				   unsigned int *hmac);
 
 #endif /* _LIBNVME_LINUX_H */
