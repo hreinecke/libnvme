@@ -3,6 +3,7 @@ LIBNVME_1_8 {
 	global:
 		nvme_uuid_find;
 		nvme_read_key;
+		nvme_export_tls_key;
 };
 
 LIBNVME_1_7 {
