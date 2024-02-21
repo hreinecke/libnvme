@@ -106,6 +106,8 @@ static void json_update_attributes(nvme_ctrl_t c,
 		}
 		if (!strcmp("tls_key", key_str) && cfg->tls_key == 0) {
 			key_data = json_object_get_string(val_obj);
+			nvme_msg(NULL, LOG_ERR, "using tls key '%s'\n",
+				 key_data);
 		}
 	}
 

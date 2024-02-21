@@ -1387,6 +1387,8 @@ unsigned char *nvme_import_tls_key(const char *keydata, int *key_len,
 	int err, decoded_len;
 
 	if (sscanf(keydata, "NVMeTLSkey-1:%02x:*s", &err) != 1) {
+		nvme_msg(NULL, LOG_ERR,
+			 "Invalid key format %s\n", keydata);
 		errno = EINVAL;
 		return NULL;
 	}
