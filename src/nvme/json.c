@@ -39,10 +39,15 @@ static void json_import_nvme_tls_key(nvme_ctrl_t c, const char *keyring_str,
 	key_data = nvme_import_tls_key(key_str, &key_len, &hmac);
 	if (!key_data)
 		return;
+	if (!hostnqn || !subsysnqn) {
+		nvme_msg(NULL, LOG_ERR, "Invalid NQNs (%s, %s)\n",
+			 hostnqn, subsysnqn);
+		return;
+	}
 	key_id = nvme_insert_tls_key_versioned(keyring_str, "psk",
 					       hostnqn, subsysnqn,
 					       0, hmac, key_data, key_len);
-	if (key_id < 0)
+	if (key_id <= 0)
 		nvme_msg(NULL, LOG_ERR, "Failed to insert TLS KEY, error %d\n",
 			 errno);
 	else {
