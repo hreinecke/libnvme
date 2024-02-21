@@ -52,6 +52,7 @@ static void json_import_nvme_tls_key(nvme_ctrl_t c, const char *keyring_str,
 			 errno);
 	else {
 		cfg->tls_key = key_id;
+		cfg->tls = true;
 		nvme_msg(NULL, LOG_ERR, "Inserted key %ld\n", key_id);
 	}
 }
