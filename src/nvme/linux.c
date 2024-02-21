@@ -1188,30 +1188,32 @@ long nvme_lookup_key(const char *type, const char *identity)
 
 unsigned char *nvme_read_key(long key_id, int *len)
 {
-	unsigned char *buffer;
-	unsigned int buffer_len = 48;
-	long res;
+	char keyring[] = ".nvme";
+	long serial;
+	void *buffer;
+	int ret;
 
-	buffer = malloc(buffer_len);
-	if (!buffer) {
-		errno = ENOMEM;
+	serial = find_key_by_type_and_desc("keyring", keyring, 0);
+	if (!serial) {
+		nvme_msg(NULL, LOG_ERR, "Failed to lookup keyring '.nvme'\n");
+		errno = ENOKEY;
 		return NULL;
 	}
-	memset(buffer, 0, buffer_len);
-	res = keyctl_read(key_id, (char *)buffer, buffer_len);
-	if (res < 0) {
+	ret = keyctl_link(serial, KEY_SPEC_SESSION_KEYRING);
+	if (ret < 0) {
+		nvme_msg(NULL, LOG_ERR,
+			 "Failed to link keyring '%s' (%lx) error %d\n",
+			 keyring, serial, errno);
+		return NULL;
+	}
+	ret = keyctl_read_alloc(key_id, &buffer);
+	if (ret < 0) {
 		nvme_msg(NULL, LOG_ERR, "Failed to read key %08lx, error %d\n",
 			 key_id, errno);
-		free(buffer);
-		errno = -res;
-		return NULL;
-	}
-	if (res > buffer_len) {
-		free(buffer);
-		errno = EFBIG;
-		return NULL;
-	}
-	*len = res;
+		buffer = NULL;
+	} else
+		*len = ret;
+
 	return buffer;
 }
 
