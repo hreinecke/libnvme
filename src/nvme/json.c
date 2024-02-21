@@ -506,6 +506,7 @@ static void json_dump_ctrl(struct json_object *ctrl_array, nvme_ctrl_t c)
 	if (value)
 		json_object_object_add(ctrl_obj, "dhchap_ctrl_key",
 				       json_object_new_string(value));
+	nvme_msg(NULL, LOG_ERR, "tls key %ld\n", cfg->tls_key);
 	if (strcmp(transport, "tcp"))
 		JSON_INT_OPTION(cfg, ctrl_obj, tls_key, 0);
 	JSON_INT_OPTION(cfg, ctrl_obj, nr_io_queues, 0);
