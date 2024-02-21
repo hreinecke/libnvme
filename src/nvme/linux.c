@@ -1241,12 +1241,17 @@ long nvme_insert_tls_key_versioned(const char *keyring, const char *key_type,
 	int ret = -1;
 
 	keyring_id = nvme_lookup_keyring(keyring);
-	if (keyring_id == 0)
+	if (keyring_id == 0) {
+		nvme_msg(NULL, LOG_ERR, "Failed to look up keyring '%s'\n",
+			 keyring);
 		return -1;
+	}
 
 	identity_len = nvme_identity_len(hmac, version, hostnqn, subsysnqn);
-	if (identity_len < 0)
+	if (identity_len < 0) {
+		nvme_msg(NULL, LOG_ERR, "Failed to calculate identity len\n");
 		return -1;
+	}
 
 	identity = malloc(identity_len);
 	if (!identity) {
@@ -1262,18 +1267,26 @@ long nvme_insert_tls_key_versioned(const char *keyring, const char *key_type,
 	memset(psk, 0, key_len);
 	ret = derive_nvme_keys(hostnqn, subsysnqn, identity, version, hmac,
 			       configured_key, psk, key_len);
-	if (ret != key_len)
+	if (ret != key_len) {
+		nvme_msg(NULL, LOG_ERR, "Failed to derive nvme keys\n");
 		return 0;
+	}
 
 	key = keyctl_search(keyring_id, key_type, identity, 0);
 	if (key > 0) {
-		if (keyctl_update(key, psk, key_len) < 0)
+		if (keyctl_update(key, psk, key_len) < 0) {
+			nvme_msg(NULL, LOG_ERR, "Failed to update key '%s'\n",
+				 identity);
 			key = 0;
+		}
 	} else {
 		key = add_key(key_type, identity,
 			      psk, key_len, keyring_id);
-		if (key < 0)
+		if (key < 0) {
+			nvme_msg(NULL, LOG_ERR, "Failed to add key '%s'\n",
+				 identity);
 			key = 0;
+		}
 	}
 	return key;
 }
