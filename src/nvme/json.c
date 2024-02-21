@@ -25,14 +25,32 @@
 #define JSON_UPDATE_BOOL_OPTION(c, k, a, o)				\
 	if (!strcmp(# a, k ) && !c->a) c->a = json_object_get_boolean(o);
 
+static void json_import_nvme_tls_key(nvme_ctrl_t c, const char *keyring_str,
+				     const char *key_str)
+{
+	struct nvme_fabrics_config *cfg = nvme_ctrl_get_config(c);
+	const char *hostnqn = nvme_host_get_hostnqn(c->s->h);
+	const char *subsysnqn = nvme_ctrl_get_subsysnqn(c);
+	_cleanup_free_ unsigned char *key_data = NULL;
+	int key_len;
+	unsigned int hmac;
+	long key_id;
+
+	key_data = nvme_import_tls_key(key_str, &key_len, &hmac);
+	if (!key_data)
+		return;
+	key_id = nvme_insert_tls_key_versioned(keyring_str, "psk",
+					       hostnqn, subsysnqn,
+					       0, hmac, key_data, key_len);
+	if (key_id > 0)
+		cfg->tls_key = key_id;
+}
+
 static void json_update_attributes(nvme_ctrl_t c,
 				   struct json_object *ctrl_obj)
 {
 	struct nvme_fabrics_config *cfg = nvme_ctrl_get_config(c);
-	const char *keyring_str = NULL;
-	_cleanup_free_ unsigned char *key_data = NULL;
-	int key_len;
-	unsigned int hmac;
+	const char *keyring_str = NULL, *key_data;
 
 	json_object_object_foreach(ctrl_obj, key_str, val_obj) {
 		JSON_UPDATE_INT_OPTION(cfg, key_str,
@@ -87,23 +105,12 @@ static void json_update_attributes(nvme_ctrl_t c,
 			}
 		}
 		if (!strcmp("tls_key", key_str) && cfg->tls_key == 0) {
-			key_data = nvme_import_tls_key(json_object_get_string(val_obj),
-						       &key_len, &hmac);
+			key_data = json_object_get_string(val_obj);
 		}
 	}
 
-	if (key_data) {
-		const char *hostnqn = nvme_host_get_hostnqn(c->s->h);
-		const char *subsysnqn = nvme_ctrl_get_subsysnqn(c);
-		long key;
-
-		key = nvme_insert_tls_key_versioned(keyring_str, "psk",
-						    hostnqn, subsysnqn,
-						    1, hmac,
-						    key_data, key_len);
-		if (key)
-			cfg->tls_key = key;
-	}
+	if (key_data)
+		json_import_nvme_tls_key(c, keyring_str, key_data);
 }
 
 static void json_parse_port(nvme_subsystem_t s, struct json_object *port_obj)
