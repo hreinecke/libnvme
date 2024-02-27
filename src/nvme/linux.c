@@ -1190,36 +1190,33 @@ int nvme_set_keyring(long key_id)
 {
 	long err;
 
+	if (key_id == 0) {
+		key_id = nvme_lookup_keyring(NULL);
+		if (key_id == 0) {
+			errno = ENOKEY;
+			return -1;
+		}
+	}
+
 	err = keyctl_link(key_id, KEY_SPEC_SESSION_KEYRING);
 	if (err < 0)
 		return -1;
 	return 0;
 }
 
-unsigned char *nvme_read_key(const char *keyring, long key_id, int *len)
+unsigned char *nvme_read_key(long keyring_id, long key_id, int *len)
 {
-	long keyring_id;
 	void *buffer;
 	int ret;
 
-	keyring_id = nvme_lookup_keyring(keyring);
-	if (!keyring_id) {
-		nvme_msg(NULL, LOG_ERR, "Failed to lookup keyring '%s'\n",
-			 keyring);
-		errno = ENOKEY;
-		return NULL;
-	}
 	ret = nvme_set_keyring(keyring_id);
 	if (ret < 0) {
-		nvme_msg(NULL, LOG_ERR,
-			 "Failed to link keyring '%s' (%lx) error %d\n",
-			 keyring, keyring_id, errno);
+		errno = -ret;
 		return NULL;
 	}
 	ret = keyctl_read_alloc(key_id, &buffer);
 	if (ret < 0) {
-		nvme_msg(NULL, LOG_ERR, "Failed to read key %08lx, error %d\n",
-			 key_id, errno);
+		errno = -ret;
 		buffer = NULL;
 	} else
 		*len = ret;
@@ -1377,7 +1374,7 @@ int nvme_set_keyring(long key_id)
 	return -1;
 }
 
-unsigned char *nvme_read_key(const char *keyring, long key_id, int *len)
+unsigned char *nvme_read_key(long keyring_id, long key_id, int *len)
 {
 	errno = ENOTSUP;
 	return NULL;
