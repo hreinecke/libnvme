@@ -1260,7 +1260,7 @@ int __scan_keys_cb(key_serial_t parent, key_serial_t key,
 	ptr = strchr(ptr + 1, ';');
 	if (!ptr)
 		return 0;
-	(d->cb)(d->keyring, key, ptr, strlen(ptr), d->data);
+	(d->cb)(d->keyring, key, ptr + 1, strlen(ptr) - 1, d->data);
 	return 1;
 }
 
