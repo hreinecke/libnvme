@@ -1224,6 +1224,24 @@ unsigned char *nvme_read_key(long keyring_id, long key_id, int *len)
 	return buffer;
 }
 
+long nvme_update_key(long keyring_id, const char *key_type,
+		     const char *identity, unsigned char *key_data,
+		     int key_len)
+{
+	long key;
+
+	key = keyctl_search(keyring_id, key_type, identity, 0);
+	if (key > 0) {
+		if (keyctl_revoke(key) < 0)
+			return 0;
+	}
+	key = add_key(key_type, identity,
+		      key_data, key_len, keyring_id);
+	if (key < 0)
+		key = 0;
+	return key;
+}
+
 struct __scan_keys_data {
 	nvme_scan_tls_keys_cb_t cb;
 	key_serial_t keyring;
@@ -1334,23 +1352,8 @@ long nvme_insert_tls_key_versioned(const char *keyring, const char *key_type,
 		return 0;
 	}
 
-	key = keyctl_search(keyring_id, key_type, identity, 0);
-	if (key > 0) {
-		if (keyctl_revoke(key) < 0) {
-			nvme_msg(NULL, LOG_ERR,
-				 "Failed to revoke key '%s' error %d\n",
-				 identity, errno);
-		}
-	}
-	key = add_key(key_type, identity,
-		      psk, key_len, keyring_id);
-	if (key < 0) {
-		nvme_msg(NULL, LOG_ERR,
-			 "Failed to add key '%s' error %d\n",
-			 identity, errno);
-		key = 0;
-	}
-
+	key = nvme_update_key(keyring_id, key_type, identity,
+			      psk, key_len);
 	return key;
 }
 
@@ -1391,6 +1394,14 @@ unsigned char *nvme_read_key(long keyring_id, long key_id, int *len)
 {
 	errno = ENOTSUP;
 	return NULL;
+}
+
+long nvme_update_key(long keyring_id, const char *key_type,
+		     const char *identity, unsigned char *key_data,
+		     int key_len)
+{
+	errno = ENOTSUP;
+	return 0;
 }
 
 int nvme_scan_tls_keys(const char *keyring, nvme_scan_tls_keys_cb_t cb,

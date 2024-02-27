@@ -5,6 +5,7 @@ LIBNVME_1_9 {
 		nvme_export_tls_key;
 		nvme_import_tls_key;
 		nvme_scan_tls_keys;
+		nvme_update_key;
 };
 
 LIBNVME_1_8 {
