@@ -1234,12 +1234,13 @@ int __scan_keys_cb(key_serial_t parent, key_serial_t key,
 		   char *desc, int desc_len, void *data)
 {
 	struct __scan_keys_data *d = data;
-	int ver, hmac;
+	int ver, hmac, uid, gid, perm;
 	char type;
 
 	if (desc_len < 6)
 		return 0;
-	if (sscanf(desc, "NVMe%01d%c%02d %*s", &ver, &type, &hmac) != 3)
+	if (sscanf(desc, "psk;%d;%d;%08x;NVMe%01d%c%02d %*s",
+		   &uid, &gid, &perm, &ver, &type, &hmac) != 6)
 		return 0;
 	if (ver < 0 || ver > 1)
 		return 0;
