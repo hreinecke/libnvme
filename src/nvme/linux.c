@@ -1227,6 +1227,44 @@ unsigned char *nvme_read_key(const char *keyring, long key_id, int *len)
 	return buffer;
 }
 
+int __scan_keys_cb(key_serial_t parent, key_serial_t key,
+		   char *desc, int desc_len, void *data)
+{
+	nvme_scan_keys_cb_t cb = data;
+	int ver, hmac;
+	char type;
+
+	if (desc_len < 6)
+		return 0;
+	if (sscanf(desc, "NVMe%01d%c%02d %*s", &ver, &type, &hmac) != 3)
+		return 0;
+	if (ver < 0 || ver > 1)
+		return 0;
+	if (type != 'G' && type != 'R')
+		return 0;
+	if (hmac != 1 && hmac != 2)
+		return 0;
+	(cb)(key, desc, desc_len);
+	return 1;
+}
+
+int nvme_scan_keys(const char *keyring, nvme_scan_keys_cb_t cb)
+{
+	key_serial_t keyring_id = nvme_lookup_keyring(keyring);
+	int ret;
+
+	if (!keyring_id) {
+		errno = EINVAL;
+		return -1;
+	}
+	ret = nvme_set_keyring(keyring_id);
+	if (ret < 0)
+		return ret;
+
+	ret = recursive_key_scan(keyring_id, __scan_keys_cb, cb);
+	return ret;
+}
+
 long nvme_insert_tls_key_versioned(const char *keyring, const char *key_type,
 				   const char *hostnqn, const char *subsysnqn,
 				   int version, int hmac,
@@ -1332,6 +1370,12 @@ unsigned char *nvme_read_key(const char *keyring, long key_id, int *len)
 {
 	errno = ENOTSUP;
 	return NULL;
+}
+
+int nvme_scan_keys(const char *keyring, nvme_scan_keys_cb_t cb)
+{
+	errno = ENOTSUP;
+	return -1;
 }
 
 long nvme_insert_tls_key_versioned(const char *keyring, const char *key_type,

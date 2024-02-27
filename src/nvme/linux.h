@@ -380,4 +380,27 @@ char *nvme_export_tls_key(const unsigned char *key_data, int key_len);
 unsigned char *nvme_import_tls_key(const char *key_data, int *key_len,
 				   unsigned int *hmac);
 
+/**
+ * typedef nvme_scan_keys_cb_t - Callback for iterating TLS keys
+ * @key:	Key for which the callback has been invoked
+ * @desc:	Description of the key
+ * @desc_len:	Length of @desc
+ *
+ * Called for each TLS PSK in the keyring.
+ */
+typedef void (*nvme_scan_keys_cb_t)(long key, char *desc, int desc_len);
+
+/**
+ * nvme_scan_tls_keys() - Iterate over available TLS keys
+ * @keyring:	Keyring holding TLS keys
+ * @cb:		Callback function
+ *
+ * Iterates @keyring and call @cb for each TLS key. When @keyring is NULL
+ * the default '.nvme' keyring is used.
+ *
+ * Return: Number of keys for which @cb was called, or -1 with errno set
+ * on error.
+ */
+unsigned char *nvme_scan_tls_keys(const char *keyring, nvme_scan_keys_cb_t cb);
+
 #endif /* _LIBNVME_LINUX_H */
