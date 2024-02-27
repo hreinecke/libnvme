@@ -1235,7 +1235,7 @@ int __scan_keys_cb(key_serial_t parent, key_serial_t key,
 {
 	struct __scan_keys_data *d = data;
 	int ver, hmac, uid, gid, perm;
-	char type;
+	char type, *ptr;
 
 	if (desc_len < 6)
 		return 0;
@@ -1248,7 +1248,19 @@ int __scan_keys_cb(key_serial_t parent, key_serial_t key,
 		return 0;
 	if (hmac != 1 && hmac != 2)
 		return 0;
-	(d->cb)(d->keyring, key, desc, desc_len, d->data);
+	ptr = strchr(desc, ';');
+	if (!ptr)
+		return 0;
+	ptr = strchr(ptr + 1, ';');
+	if (!ptr)
+		return 0;
+	ptr = strchr(ptr + 1, ';');
+	if (!ptr)
+		return 0;
+	ptr = strchr(ptr + 1, ';');
+	if (!ptr)
+		return 0;
+	(d->cb)(d->keyring, key, ptr, strlen(ptr), d->data);
 	return 1;
 }
 
