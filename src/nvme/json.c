@@ -69,7 +69,13 @@ static void json_export_nvme_tls_key(long keyring_id, long tls_key,
 	if (key_data) {
 		_cleanup_free_ char *tls_str = NULL;
 
-		tls_str = nvme_export_tls_key(key_data, key_len);
+		/*
+		 * The key exported from the keystore is always the
+		 * 'retained' key, and must not be transformed again
+		 * upon re-import. So always use the HMAC specified '0'
+		 * here.
+		 */
+		tls_str = nvme_export_tls_key_and_hmac(key_data, key_len, 0);
 		if (tls_str)
 			json_object_object_add(obj, "tls_key",
 					       json_object_new_string(tls_str));
