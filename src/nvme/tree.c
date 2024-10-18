@@ -1933,14 +1933,31 @@ static int nvme_configure_ctrl(nvme_root_t r, nvme_ctrl_t c, const char *path,
 		c->dhchap_ctrl_key = ctrl_key;
 	}
 
+	/*
+	 * The 'tls_key' attribute is the negotiated TLS key
+	 * if the connection is TLS encrypted.
+	 */
 	tls_psk = nvme_get_ctrl_attr(c, "tls_key");
 	if (tls_psk) {
 		char *endptr;
 		long key_id = strtol(tls_psk, &endptr, 16);
 
 		if (endptr != tls_psk) {
-			c->cfg.tls_key = key_id;
 			c->cfg.tls = true;
+		}
+	}
+
+	/*
+	 * The 'tls_configured_key' is the key specified by
+	 * the user via the '--tls_key' option.
+	 */
+	tls_psk = nvme_get_ctrl_attr(c, "tls_configured_key");
+	if (tls_psk) {
+		char *endptr;
+		long key_id = strtol(tls_psk, &endptr, 16);
+
+		if (endptr != tls_psk) {
+			c->cfg.tls_key = key_id;
 		}
 	}
 
